@@ -108,6 +108,7 @@ class fill(object):
         self.shells = list()
         self.active_shell = None
 
+        self.mask = mampy.get_active_mask()
         self.setup()
 
     # @Slot()
@@ -163,6 +164,7 @@ class fill(object):
         mask = mampy.get_active_mask()
         mask.set_mode(mask.kSelectComponentMode)
         mask.set_mask(mask.kSelectMeshFaces)
+        cmds.selectType(meshUVShell=True)
         cmds.select(cl=True)
         cmds.undoInfo(closeChunk=True)
 
@@ -183,9 +185,9 @@ class fill(object):
                 continue
             cmds.select(list(each), r=True)
 
+        cmds.selectType(meshUVShell=False, facet=True)
         cmds.polyUVSet(self.dagpath, delete=True, uvSet=UVSET_NAME)
 
 
 if __name__ == '__main__':
     fill()
-

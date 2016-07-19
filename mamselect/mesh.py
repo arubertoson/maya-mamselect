@@ -5,18 +5,17 @@ import sys
 import logging
 import collections
 
-from PySide import QtCore, QtGui
-
 import maya.api.OpenMaya as api
 from maya import cmds, mel
 from maya.OpenMaya import MGlobal
 
 import mampy
-from mampy.utils import undoable, repeatable, get_object_under_cursor, DraggerCtx, mvp
-from mampy.dgcomps import Component, MeshPolygon
+from mampy.utils import undoable, repeatable, get_object_under_cursor
+from mampy.dgcomps import Component
 from mampy.dgcontainers import SelectionList
 from mampy.exceptions import InvalidSelection
 
+from masks import set_selection_mask
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -94,8 +93,6 @@ def toggle_mesh_under_cursor():
                 cmds.hilite(obj.name)
 
 
-
-
 @undoable
 def convert(comptype, **convert_arguments):
     """
@@ -141,8 +138,6 @@ def flood():
     # extend selected with ``mampy.Component`` objects.
     selected.extend([comp.get_mesh_shell() for comp in selected.itercomps()])
     cmds.select(list(selected))
-
-
 
 
 @undoable
@@ -269,4 +264,4 @@ def traverse(expand=True, mode='normal'):
 
 
 if __name__ == '__main__':
-    invert(True)
+    inbetween()
