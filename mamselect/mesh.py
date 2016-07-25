@@ -10,6 +10,7 @@ from maya import cmds, mel
 from maya.OpenMaya import MGlobal
 
 import mampy
+from mampy.computils import get_connected_components
 from mampy.utils import undoable, repeatable, get_object_under_cursor
 from mampy.dgcomps import Component
 from mampy.dgcontainers import SelectionList
@@ -53,16 +54,56 @@ def adjacent(expand=True):
 
 @undoable
 @repeatable
-def clear_mesh_or_loop():
+def select_deselect_isolated_components():
     """Clear mesh or loop under mouse."""
-    preselect_hilite = mampy.ls(preSelectHilite=True)[0]
+    try:
+        preselect_hilite = mampy.ls(preSelectHilite=True)[0]
+    except IndexError:
+        return 'Nothing in preselection.'
 
-    if preselect_hilite.type == api.MFn.kEdgeComponent:
-        cmds.polySelect(preselect_hilite.dagpath,
-                        edgeLoop=preselect_hilite.index, d=True)
-    elif preselect_hilite.type == api.MFn.kMeshPolygonComponent:
-        cmds.polySelect(preselect_hilite.dagpath,
-                        extendToShell=preselect_hilite.index, d=True)
+    if preselect_hilite.type == api.MFn.kMeshEdgeComponent:
+        if preselect_hilite not in mampy.selected():
+            cmds.polySelect(
+                preselect_hilite.dagpath,
+                edgeLoop=preselect_hilite.index,
+                add=True
+            )
+        else:
+            cmds.polySelect(
+                preselect_hilite.dagpath,
+                edgeLoop=preselect_hilite.index,
+                d=True,
+            )
+    else:
+        selected = mampy.selected()
+        if not selected:
+            cmds.select(list(preselect_hilite.get_complete()), add=True)
+            return
+        elif selected and preselect_hilite.dagpath not in selected:
+            selected.append(preselect_hilite.dagpath)
+
+        for i in selected.itercomps():
+            if not i:
+                i = Component.create(i.dagpath, preselect_hilite.type)
+
+            if preselect_hilite.dagpath == i.dagpath:
+                if len(i) == 0:
+                    cmds.select(list(preselect_hilite.get_complete()), add=True)
+                elif i.is_complete():
+                    cmds.select(list(i), toggle=True)
+                else:
+                    connected = get_connected_components(i)
+                    empty_connects = get_connected_components(i.toggle())
+
+                    if preselect_hilite in connected:
+                        for c in connected.itercomps():
+                            if preselect_hilite in c:
+                                cmds.select(list(c), d=True)
+                    elif preselect_hilite in empty_connects:
+                        for c in empty_connects.itercomps():
+                            if preselect_hilite in c:
+                                cmds.select(list(c), add=True)
+                return
 
 
 @undoable
@@ -75,22 +116,15 @@ def toggle_mesh_under_cursor():
         if under_cursor_mesh is None:
             raise InvalidSelection('No valid selection')
         obj = mampy.get_node(under_cursor_mesh)
-    else:
-        obj = preselect.pop()
-
-    if issubclass(obj.__class__, Component):
-        component = obj.get_complete()
-        if component.node in mampy.selected():
-            cmds.select(list(component), d=True)
+        if cmds.selectMode(q=True, component=True):
+            cmds.hilite(obj.get_transform().name)
         else:
-            dagpath = mampy.get_node(component.dagpath)
-            cmds.hilite(dagpath.get_transform().name, unHilite=True)
-        return
+            cmds.select(obj.name, toggle=True)
     else:
-        cmds.select(obj.name, toggle=True)
-        if obj.name in mampy.selected():
-            if cmds.selectMode(q=True, component=True):
-                cmds.hilite(obj.name)
+        obj = preselect.iterdags().next()
+        trn = obj.get_transform()
+        if trn.name in mampy.ls(hl=True):
+            cmds.hilite(trn.name, unHilite=True)
 
 
 @undoable
@@ -264,4 +298,4 @@ def traverse(expand=True, mode='normal'):
 
 
 if __name__ == '__main__':
-    inbetween()
+    pass
