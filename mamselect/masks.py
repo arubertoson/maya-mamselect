@@ -35,8 +35,7 @@ def exit_tool_and_mask():
     """
     base_tools = ['{}SuperContext'.format(i) for i in ('select', 'move', 'rotate', 'scale')]
     if cmds.currentCtx() not in base_tools:
-        cmds.ctxCompletion()
-        # cmds.setToolTo('selectSuperContext')
+        cmds.setToolTo('selectSuperContext')
     else:
         if cmds.selectMode(q=True, object=True):
             hilited = mampy.ls(hl=True)
