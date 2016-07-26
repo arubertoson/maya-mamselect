@@ -11,7 +11,7 @@ Mamselect comes with modules container isolated functionality. Please have a loo
     mamselect.isolate.toggle()
 ```
 
-![Alt text](/isolate.gif?raq=True "Isolate Selected")
+![Alt text](/doc/isolate.gif?raw=True "Isolate Selected")
 
 ## Installation
 
