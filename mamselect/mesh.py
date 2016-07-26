@@ -24,6 +24,10 @@ logger.setLevel(logging.INFO)
 optionvar = mampy.optionVar()
 
 
+class TrackSelectionOrderNotSet(Exception):
+    """Raise if track selection order is not set in preferences."""
+
+
 @undoable
 @repeatable
 def adjacent(expand=True):
@@ -59,7 +63,7 @@ def select_deselect_isolated_components():
     try:
         preselect_hilite = mampy.ls(preSelectHilite=True)[0]
     except IndexError:
-        return 'Nothing in preselection.'
+        return logger.warn('Nothing in preselection.')
 
     if preselect_hilite.type == api.MFn.kMeshEdgeComponent:
         if preselect_hilite not in mampy.selected():
@@ -114,7 +118,7 @@ def toggle_mesh_under_cursor():
     if not preselect:
         under_cursor_mesh = get_object_under_cursor()
         if under_cursor_mesh is None:
-            raise InvalidSelection('No valid selection')
+            return
         obj = mampy.get_node(under_cursor_mesh)
         if cmds.selectMode(q=True, component=True):
             cmds.hilite(obj.get_transform().name)
@@ -178,6 +182,10 @@ def flood():
 @repeatable
 def inbetween():
     """Select components between the last two selections."""
+    if not cmds.selectPref(q=True, trackSelectionOrder=True):
+        raise TrackSelectionOrderNotSet('Set track selection order in'
+                                        ' preferences.')
+
     slist = mampy.ordered_selection(-2)
     if not slist or not len(slist) == 2:
         return logger.warn('Invalid selection, select two mesh components.')
