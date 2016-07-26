@@ -10,19 +10,30 @@ To note, this isolating system works only on objects. This means you can't isola
 components. Although that might be desirable at times from experience it's
 confusing since mesh operations will still apply to components outside of view.
 """
+import logging
+
 from PySide.QtCore import QTimer
 
 from maya import cmds
 from maya.OpenMaya import MEventMessage
 
 
+logger = logging.getLogger(__name__)
+
+
 TIMER = QTimer()
+TIMER.setSingleShot(True)
 TIMER_SET = False
 SELECT_CHANGE_EVENT = None
 
 
 def isolate_new_objects():
-    cmds.sets(get_selected_objects(), include=get_isolate_set_name())
+    objs = get_selected_objects()
+    logger.debug('changed selction: {}'.format(objs))
+    if not objs:
+        pass
+    else:
+        cmds.sets(objs, include=get_isolate_set_name())
 
 
 def get_isolate_state():
@@ -63,6 +74,8 @@ def update_panel():
 
 
 def set_isolate_selected_on():
+    if not get_selected_objects():
+        return logger.warn('Nothing selected, ignoring isolate.')
     create_select_change_event()
     cmds.isolateSelect(get_active_panel(), state=True)
     update_panel()
