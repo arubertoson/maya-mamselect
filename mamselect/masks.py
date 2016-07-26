@@ -33,8 +33,8 @@ def exit_tool_and_mask():
         tool_select()
 
     """
-    base_tools = ['{}SuperContext'.format(i) for i in ('select', 'move', 'rotate', 'scale')]
-    if cmds.currentCtx() not in base_tools:
+    # base_tools = ['{}SuperContext'.format(i) for i in ('select', 'move', 'rotate', 'scale')]
+    if not cmds.currentCtx() == 'selectSuperContext':
         cmds.setToolTo('selectSuperContext')
     else:
         if cmds.selectMode(q=True, object=True):
