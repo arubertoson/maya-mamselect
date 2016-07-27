@@ -16,7 +16,7 @@ from mampy.dgcomps import Component
 from mampy.dgcontainers import SelectionList
 from mampy.exceptions import InvalidSelection
 
-from masks import set_selection_mask
+from mamselect.masks import set_selection_mask
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -174,7 +174,10 @@ def flood():
         raise InvalidSelection('Select mesh component')
 
     # extend selected with ``mampy.Component`` objects.
-    selected.extend([comp.get_mesh_shell() for comp in selected.itercomps()])
+    if list(selected.itercomps())[0].type == api.MFn.kMeshMapComponent:
+        selected.extend([comp.get_uv_shell() for comp in selected.itercomps()])
+    else:
+        selected.extend([comp.get_mesh_shell() for comp in selected.itercomps()])
     cmds.select(list(selected))
 
 
@@ -306,4 +309,4 @@ def traverse(expand=True, mode='normal'):
 
 
 if __name__ == '__main__':
-    pass
+    flood()
