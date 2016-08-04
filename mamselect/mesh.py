@@ -131,6 +131,19 @@ def toggle_mesh_under_cursor():
             cmds.hilite(trn.name, unHilite=True)
 
 
+def deselect_all_but():
+    preselect = mampy.ls(preSelectHilite=True)
+    obj = get_object_under_cursor()
+    if not obj:
+        return
+
+    cmds.select(obj, r=True)
+    if not preselect:
+        return
+    else:
+        cmds.hilite(obj, toggle=True)
+
+
 @undoable
 def convert(comptype, **convert_arguments):
     """
@@ -309,4 +322,4 @@ def traverse(expand=True, mode='normal'):
 
 
 if __name__ == '__main__':
-    flood()
+    deselect_all_but()
