@@ -5,6 +5,7 @@ import maya.cmds as cmds
 from maya.api.OpenMaya import MFn
 
 import mampy
+from mampy.dgcontainers import SelectionList
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class WalkSelection(object):
 class WalkPattern(collections.Sequence):
 
     def __init__(self):
-        self.elements = mampy.SelectionList()
+        self.elements = SelectionList()
 
         self._slist = None
         self._elist = None
@@ -88,7 +89,7 @@ class WalkPattern(collections.Sequence):
     @property
     def comp(self):
         if self._comp is None:
-            self._temp = mampy.SelectionList()
+            self._temp = SelectionList()
             self._temp.extend(self.slist)
             self._comp = self._temp[0]
         return self._comp
@@ -121,7 +122,7 @@ class WalkPattern(collections.Sequence):
     @property
     def pattern(self):
         if self._pattern is None:
-            self._pattern = mampy.SelectionList()
+            self._pattern = SelectionList()
             for idx in self.walklist:
                 new = self.comp.new()
                 new.add(idx)
@@ -178,6 +179,9 @@ class WalkPattern(collections.Sequence):
         return self.__class__()
 
 
+def flood():
+    cmds.select(WalkSelection().pattern)
+
+
 if __name__ == '__main__':
-    ws = WalkSelection()
-    cmds.select(ws.pattern)
+    flood()
