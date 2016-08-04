@@ -29,11 +29,14 @@ SELECT_CHANGE_EVENT = None
 
 def isolate_new_objects():
     objs = get_selected_objects()
-    logger.debug('changed selction: {}'.format(objs))
+    logger.debug('changed selection: {}'.format(objs))
     if not objs:
         pass
     else:
-        cmds.sets(objs, include=get_isolate_set_name())
+        try:
+            cmds.sets(objs, include=get_isolate_set_name())
+        except TypeError:
+            pass
 
 
 def get_isolate_state():
@@ -51,6 +54,8 @@ def on_selection_changed(*args):
 
 def create_select_change_event():
     global SELECT_CHANGE_EVENT
+    if SELECT_CHANGE_EVENT:
+        return True
     event = 'SelectionChanged'
     callback = on_selection_changed
     SELECT_CHANGE_EVENT = MEventMessage.addEventCallback(event, callback)
@@ -76,9 +81,9 @@ def update_panel():
 def set_isolate_selected_on():
     if not get_selected_objects():
         return logger.warn('Nothing selected, ignoring isolate.')
-    create_select_change_event()
     cmds.isolateSelect(get_active_panel(), state=True)
-    update_panel()
+    cmds.isolateSelect(get_active_panel(), addSelected=True)
+    create_select_change_event()
 
 
 def get_selected_objects():
@@ -86,13 +91,18 @@ def get_selected_objects():
 
 
 def set_isolate_selected_off_or_update():
+    global SELECT_CHANGE_EVENT
     isoset = cmds.sets(get_isolate_set_name(), q=True)
     selset = get_selected_objects()
 
     if isoset:
         if set(isoset) == set(selset) or not selset:
             # Cleanup
-            MEventMessage.removeCallback(SELECT_CHANGE_EVENT)
+            try:
+                MEventMessage.removeCallback(SELECT_CHANGE_EVENT)
+                SELECT_CHANGE_EVENT = None
+            except RuntimeError:
+                pass
             cmds.isolateSelect(get_active_panel(), state=False)
         else:
             update_panel()
