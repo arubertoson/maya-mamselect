@@ -2,8 +2,7 @@
 Improvement to Mayas isolate select tool.
 
 I wanted more control when isolating and realized that I was re isolating objects
-a lot after having initially isolated an object. A lot of functionality was not
-there when this was created, such as auto adding new objects on creation, meaning
+a lot after having initially isolated an object. A lot of functionality was not there when this was created, such as auto adding new objects on creation, meaning
 some functionality is obsolete.
 
 To note, this isolating system works only on objects. This means you can't isolate
@@ -30,13 +29,12 @@ SELECT_CHANGE_EVENT = None
 def isolate_new_objects():
     objs = get_selected_objects()
     logger.debug('changed selection: {}'.format(objs))
-    if not objs:
-        pass
-    else:
-        try:
-            cmds.sets(objs, include=get_isolate_set_name())
-        except TypeError:
-            pass
+    if objs:
+        if not any(i in objs[0] for i in ['.f', '.vtx', '.e', '.map']):
+            try:
+                cmds.sets(objs, include=get_isolate_set_name())
+            except TypeError:
+                pass
 
 
 def get_isolate_state():
