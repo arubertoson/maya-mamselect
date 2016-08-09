@@ -82,6 +82,11 @@ def set_isolate_set(selection):
             isoset.remove(obj)
     cmds.hilite(isoset, toggle=True)
 
+    if not set_name:
+        for i in selection:
+            cmds.isolateSelect(get_active_panel(), addDagObject=i)
+        return
+
     cmds.sets(clear=set_name)
     cmds.sets(selection, include=set_name)
 
