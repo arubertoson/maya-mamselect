@@ -3,6 +3,7 @@ Contains selection tools for working with meshes and surfaces.
 """
 import sys
 import logging
+import itertools
 import collections
 
 import maya.api.OpenMaya as api
@@ -10,7 +11,6 @@ from maya import cmds, mel
 from maya.OpenMaya import MGlobal
 
 import mampy
-from mampy.computils import get_connected_components
 from mampy.utils import undoable, repeatable, get_object_under_cursor
 from mampy.dgcomps import Component
 from mampy.dgcontainers import SelectionList
@@ -81,8 +81,7 @@ def select_deselect_isolated_components():
     else:
         selected = mampy.selected()
         if not selected:
-            cmds.select(list(preselect_hilite.get_complete()), add=True)
-            return
+            return cmds.select(list(preselect_hilite.get_complete()), add=True)
         elif selected and preselect_hilite.dagpath not in selected:
             selected.append(preselect_hilite.dagpath)
 
@@ -96,18 +95,17 @@ def select_deselect_isolated_components():
                 elif i.is_complete():
                     cmds.select(list(i), toggle=True)
                 else:
-                    connected = get_connected_components(i)
-                    empty_connects = get_connected_components(i.toggle())
+                    connected = list(i.get_connected())
+                    empty_connects = list(i.toggle().get_connected())
 
-                    if preselect_hilite in connected:
-                        for c in connected.itercomps():
-                            if preselect_hilite in c:
-                                cmds.select(list(c), d=True)
-                    elif preselect_hilite in empty_connects:
-                        for c in empty_connects.itercomps():
-                            if preselect_hilite in c:
-                                cmds.select(list(c), add=True)
-                return
+                    if any(preselect_hilite in i for i in connected):
+                        kw = {'d': True}
+                    elif any(preselect_hilite in i for i in empty_connects):
+                        kw = {'add': True}
+
+                    for c in itertools.chain(connected, empty_connects):
+                        if preselect_hilite in c:
+                            return cmds.select(list(c), **kw)
 
 
 @undoable
@@ -322,4 +320,4 @@ def traverse(expand=True, mode='normal'):
 
 
 if __name__ == '__main__':
-    deselect_all_but()
+    select_deselect_isolated_components()
