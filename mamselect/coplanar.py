@@ -7,7 +7,7 @@ import maya.api.OpenMaya as api
 
 import mampy
 from mampy.utils import DraggerCtx, mvp
-from mampy.dgcontainers import SelectionList
+from mampy.containers import SelectionList
 
 
 optionvar = mampy.optionVar()

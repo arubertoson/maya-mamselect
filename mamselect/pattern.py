@@ -5,7 +5,7 @@ import maya.cmds as cmds
 from maya.api.OpenMaya import MFn
 
 import mampy
-from mampy.dgcontainers import SelectionList
+from mampy.containers import SelectionList
 
 logger = logging.getLogger(__name__)
 

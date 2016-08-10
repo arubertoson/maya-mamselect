@@ -9,7 +9,7 @@ even the subdivision levels.
 from functools import partial
 
 import mampy
-from mampy.dgcontainers import SelectionList
+from mampy.containers import SelectionList
 from maya import cmds
 
 
