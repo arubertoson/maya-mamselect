@@ -3,7 +3,6 @@ Contains selection tools for working with meshes and surfaces.
 """
 import sys
 import logging
-import itertools
 import collections
 
 import maya.api.OpenMaya as api
@@ -12,8 +11,8 @@ from maya.OpenMaya import MGlobal
 
 import mampy
 from mampy.utils import undoable, repeatable, get_object_under_cursor
-from mampy.dgcomps import Component
-from mampy.dgcontainers import SelectionList
+from mampy.comps import Component
+from mampy.containers import SelectionList
 from mampy.exceptions import InvalidSelection
 
 from mamselect.masks import set_selection_mask
@@ -56,56 +55,90 @@ def adjacent(expand=True):
     cmds.select(list(toggle_components), toggle=True)
 
 
+def select_deselect_border_edge(root_edge, tolerance):
+
+    def get_vector_from_edge(edge, index):
+        p1, p2 = [edge.mesh.getPoint(x) for x in edge.mesh.getEdgeVertices(index)]
+        return p2 - p1
+
+    edge_vector = get_vector_from_edge(root_edge, root_edge.index)
+    indices = cmds.polySelect(
+        root_edge.dagpath,
+        edgeBorder=root_edge.index,
+        noSelection=True
+    )
+    edge = root_edge.new().add(indices)
+    edge_to_select = root_edge.new()
+    for idx in edge.indices:
+        vec = get_vector_from_edge(edge, idx)
+        if edge_vector.isParallel(vec, 0.35):
+            edge_to_select.add(idx)
+
+    connected = edge_to_select.get_connected()
+    for e in connected:
+        if root_edge in e:
+            print root_edge in mampy.comp_ls()
+            if root_edge in mampy.comp_ls():
+                cmds.select(list(e), d=True)
+            else:
+                cmds.select(list(e), add=True)
+
+
+def select_deselect_edge_lists(root_edge, loop=True):
+    kw = {'edgeLoop' if loop else 'edgeRing': root_edge.index}
+    if root_edge in mampy.comp_ls():
+        kw.update({'deselect': True})
+    else:
+        kw.update({'add': True})
+    cmds.polySelect(
+        root_edge.dagpath,
+        **kw
+    )
+
+
+def select_deselect_surrounded(root_comp):
+    selected = mampy.comp_ls()
+    if not selected:
+        cmds.select(list(root_comp.get_complete()), add=True)
+    else:
+        for comp in selected:
+            if not root_comp.dagpath == comp.dagpath:
+                continue
+
+            if comp.is_complete():
+                cmds.select(list(comp), d=True)
+            else:
+                connected = list(comp.get_connected())
+                connected_not_selected = list(comp.toggle().get_connected())
+
+                if any(root_comp in c for c in connected):
+                    kw = {'deselect': True}
+                    iterable = connected
+                elif any(root_comp in c for c in connected_not_selected):
+                    kw = {'add': True}
+                    iterable = connected_not_selected
+
+                for c in iterable:
+                    if root_comp in c:
+                        cmds.select(list(c), **kw)
+
+
 @undoable
 @repeatable
-def select_deselect_isolated_components():
+def select_deselect_isolated_components(loop=True, tolerance=0.35):
     """Clear mesh or loop under mouse."""
     try:
-        preselect_hilite = mampy.ls(preSelectHilite=True)[0]
+        preselect_hilite = mampy.comp_ls(preSelectHilite=True).pop()
     except IndexError:
         return logger.warn('Nothing in preselection.')
 
     if preselect_hilite.type == api.MFn.kMeshEdgeComponent:
-        if preselect_hilite not in mampy.selected():
-            cmds.polySelect(
-                preselect_hilite.dagpath,
-                edgeLoop=preselect_hilite.index,
-                add=True
-            )
-        else:
-            cmds.polySelect(
-                preselect_hilite.dagpath,
-                edgeLoop=preselect_hilite.index,
-                d=True,
-            )
+        if not loop:
+            select_deselect_edge_lists(preselect_hilite, loop)
+        elif preselect_hilite.is_border(preselect_hilite.index):
+            select_deselect_border_edge(preselect_hilite, tolerance)
     else:
-        selected = mampy.selected()
-        if not selected:
-            return cmds.select(list(preselect_hilite.get_complete()), add=True)
-        elif selected and preselect_hilite.dagpath not in selected:
-            selected.append(preselect_hilite.dagpath)
-
-        for i in selected.itercomps():
-            if not i:
-                i = Component.create(i.dagpath, preselect_hilite.type)
-
-            if preselect_hilite.dagpath == i.dagpath:
-                if len(i) == 0:
-                    cmds.select(list(preselect_hilite.get_complete()), add=True)
-                elif i.is_complete():
-                    cmds.select(list(i), toggle=True)
-                else:
-                    connected = list(i.get_connected())
-                    empty_connects = list(i.toggle().get_connected())
-
-                    if any(preselect_hilite in i for i in connected):
-                        kw = {'d': True}
-                    elif any(preselect_hilite in i for i in empty_connects):
-                        kw = {'add': True}
-
-                    for c in itertools.chain(connected, empty_connects):
-                        if preselect_hilite in c:
-                            return cmds.select(list(c), **kw)
+        select_deselect_surrounded(preselect_hilite)
 
 
 @undoable
