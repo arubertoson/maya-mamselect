@@ -5,15 +5,15 @@ import sys
 import logging
 import collections
 
-import maya.api.OpenMaya as api
 from maya import cmds, mel
 from maya.OpenMaya import MGlobal
+import maya.api.OpenMaya as api
 
 import mampy
-from mampy.utils import undoable, repeatable, get_object_under_cursor
-from mampy.comps import Component
-from mampy.containers import SelectionList
-from mampy.exceptions import InvalidSelection
+from mampy._old.utils import undoable, repeatable, get_object_under_cursor
+from mampy._old.comps import Component
+from mampy._old.containers import SelectionList
+from mampy._old.exceptions import InvalidSelection
 
 from mamselect.masks import set_selection_mask
 
@@ -137,6 +137,8 @@ def select_deselect_isolated_components(loop=True, tolerance=0.35):
             select_deselect_edge_lists(preselect_hilite, loop)
         elif preselect_hilite.is_border(preselect_hilite.index):
             select_deselect_border_edge(preselect_hilite, tolerance)
+        else:
+            select_deselect_edge_lists(preselect_hilite, loop)
     else:
         select_deselect_surrounded(preselect_hilite)
 

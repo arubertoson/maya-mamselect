@@ -8,9 +8,10 @@ even the subdivision levels.
 """
 from functools import partial
 
-import mampy
-from mampy.containers import SelectionList
 from maya import cmds
+
+import mampy
+from mampy._old.containers import SelectionList
 
 
 def get_shape_from_object(objects):
