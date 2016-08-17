@@ -6,8 +6,8 @@ from maya import cmds
 import maya.api.OpenMaya as api
 
 import mampy
-from mampy.utils import DraggerCtx, mvp
-from mampy.containers import SelectionList
+from mampy._old.utils import DraggerCtx, mvp
+from mampy._old.containers import SelectionList
 
 
 optionvar = mampy.optionVar()
@@ -22,9 +22,10 @@ class coplanar(DraggerCtx):
     CONTEXT_NAME = 'mamtools_coplanar_context'
     OPTIONVAR_NAME = 'mamtools_coplanar_threshold'
 
-    def __init__(self, mode, context=False):
+    def __init__(self, mode, context=False, add=False):
         super(coplanar, self).__init__(self.CONTEXT_NAME)
 
+        self.add = add
         self.mode = mode
         self.default = self.threshold
         self.value = self.threshold
@@ -35,6 +36,9 @@ class coplanar(DraggerCtx):
         self._label = None
         self._mesh_vectors = None
         self._comp_indices = None
+
+        if add:
+            self.old_selection = mampy.selected()
 
         if mode == self.HILITED:
             self._setup_hilited()
@@ -63,7 +67,10 @@ class coplanar(DraggerCtx):
     @property
     def slist(self):
         if self._slist is None:
-            self._slist = mampy.selected()
+            if self.add:
+                self._slist = mampy.ordered_selection(-1)
+            else:
+                self._slist = mampy.selected()
             if not self._slist:
                 raise TypeError('Invalid selection, select mesh face.')
         return self._slist
@@ -75,9 +82,10 @@ class coplanar(DraggerCtx):
             if not comp.is_face():
                 raise TypeError('Invalid selection, select mesh face.')
 
-            self._normal = comp.mesh.getPolygonNormal(
-                comp.index, api.MSpace.kWorld
-            )
+            vec = api.MVector()
+            for idx in comp.indices:
+                vec += comp.mesh.getPolygonNormal(idx, api.MSpace.kWorld)
+            self._normal = vec / len(comp.indices)
         return self._normal
 
     @property
@@ -102,16 +110,16 @@ class coplanar(DraggerCtx):
         return self._label
 
     @classmethod
-    def contiguous(cls, context=False):
-        return cls(cls.CONTIGUOUS, context)
+    def contiguous(cls, context=False, add=False):
+        return cls(cls.CONTIGUOUS, context, add)
 
     @classmethod
-    def hilited(cls, context=False):
-        return cls(cls.HILITED, context)
+    def hilited(cls, context=False, add=True):
+        return cls(cls.HILITED, context, add)
 
     @classmethod
-    def object(cls, context=False):
-        return cls(cls.OBJECT, context)
+    def object(cls, context=False, add=True):
+        return cls(cls.OBJECT, context, add)
 
     def _setup_hilited(self):
         cmds.polySelectConstraint(
@@ -173,6 +181,9 @@ class coplanar(DraggerCtx):
     def tear_down(self):
         if self.mode == self.HILITED:
             cmds.polySelectConstraint(disable=True)
+
+        if self.add:
+            cmds.select(list(self.old_selection), add=True)
         self.label.close()
 
     def drag(self):
@@ -220,3 +231,8 @@ class coplanar(DraggerCtx):
 
     def release(self):
         self.default = self.value
+
+
+if __name__ == '__main__':
+    # coplanar.contiguous(True, add=True)
+    coplanar.object(add=True)
