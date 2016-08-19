@@ -3,17 +3,22 @@ Contains selection tools for working with meshes and surfaces.
 """
 import sys
 import logging
+import itertools
 import collections
 
 from maya import cmds, mel
 from maya.OpenMaya import MGlobal
+from maya.api.OpenMaya import MFn
 import maya.api.OpenMaya as api
 
 import mampy
-from mampy._old.utils import undoable, repeatable, get_object_under_cursor
-from mampy._old.comps import Component
-from mampy._old.containers import SelectionList
-from mampy._old.exceptions import InvalidSelection
+from mampy.core.selectionlist import ComponentList
+from mampy.core.dagnodes import Node
+from mampy.core.components import SingleIndexComponent
+from mampy.core.exceptions import NothingSelected, InvalidSelection
+from mampy.utils import (get_active_flags_in_mask, get_object_under_cursor,
+                         undoable, repeatable)
+
 
 from mamselect.masks import set_selection_mask
 
@@ -23,149 +28,141 @@ logger.setLevel(logging.INFO)
 optionvar = mampy.optionVar()
 
 
-class TrackSelectionOrderNotSet(Exception):
-    """Raise if track selection order is not set in preferences."""
-
-
-@undoable
+@undoable()
 @repeatable
-def adjacent(expand=True):
+def adjacent():
     """Grow and remove previous selection to get adjacent selection.
 
     .. todo:: make contractable
     """
-    selected = mampy.selected()
-    components = list(selected.itercomps())
-    if not selected or not components:
-        raise InvalidSelection('Select valid mesh component.')
+    selected = mampy.complist()
+    if not selected:
+        raise NothingSelected()
 
-    toggle_components = SelectionList()
-    for component in components:
+    toggle_components = ComponentList()
+    for each in selected:
         try:
             adjacent_selection = {
-                api.MFn.kMeshPolygonComponent: component.to_edge().to_face(),
-                api.MFn.kMeshEdgeComponent: component.to_vert().to_edge(),
-                api.MFn.kMeshVertComponent: component.to_edge().to_vert(),
-                api.MFn.kMeshMapComponent: component.to_edge().to_map(),
-            }[component.type]
-            toggle_components.extend(adjacent_selection)
+                MFn.kMeshPolygonComponent: each.to_edge().to_face(),
+                MFn.kMeshEdgeComponent: each.to_vert().to_edge(),
+                MFn.kMeshVertComponent: each.to_edge().to_vert(),
+                MFn.kMeshMapComponent: each.to_edge().to_map(),
+            }[each.type]
+            toggle_components.append(adjacent_selection)
         except KeyError:
-            raise InvalidSelection('Select component from mesh object.')
+            raise InvalidSelection('Selection must be mesh component.')
 
-    cmds.select(list(toggle_components), toggle=True)
+    cmds.select(toggle_components.cmdslist(), toggle=True)
 
 
 def select_deselect_border_edge(root_edge, tolerance):
 
     def get_vector_from_edge(edge, index):
-        p1, p2 = [edge.mesh.getPoint(x) for x in edge.mesh.getEdgeVertices(index)]
+        p1, p2 = [edge.points[i] for i in edge.vertices[index]]
         return p2 - p1
 
-    edge_vector = get_vector_from_edge(root_edge, root_edge.index)
-    indices = cmds.polySelect(
+    root_edge_vector = get_vector_from_edge(root_edge, root_edge.index)
+    edge_border_indices = cmds.polySelect(
         root_edge.dagpath,
         edgeBorder=root_edge.index,
         noSelection=True
     )
-    edge = root_edge.new().add(indices)
-    edge_to_select = root_edge.new()
-    for idx in edge.indices:
-        vec = get_vector_from_edge(edge, idx)
-        if edge_vector.isParallel(vec, 0.35):
-            edge_to_select.add(idx)
+    border_edge = root_edge.new().add(edge_border_indices)
+    edges_to_select = root_edge.new()
+    for idx in border_edge:
+        border_edge_vector = get_vector_from_edge(border_edge, idx)
+        if root_edge_vector.isParallel(border_edge_vector, tolerance):
+            edges_to_select.add(idx)
 
-    connected = edge_to_select.get_connected()
+    connected = edges_to_select.get_connected_components()
     for e in connected:
-        if root_edge in e:
-            print root_edge in mampy.comp_ls()
-            if root_edge in mampy.comp_ls():
-                cmds.select(list(e), d=True)
+        if root_edge.index in e:
+            if root_edge in mampy.complist():
+                cmds.select(e.cmdslist(), d=True)
             else:
-                cmds.select(list(e), add=True)
+                cmds.select(e.cmdslist(), add=True)
 
 
 def select_deselect_edge_lists(root_edge, loop=True):
     kw = {'edgeLoop' if loop else 'edgeRing': root_edge.index}
-    if root_edge in mampy.comp_ls():
+    if root_edge in mampy.complist():
         kw.update({'deselect': True})
     else:
         kw.update({'add': True})
-    cmds.polySelect(
-        root_edge.dagpath,
-        **kw
-    )
+    cmds.polySelect(root_edge.dagpath, **kw)
 
 
 def select_deselect_surrounded(root_comp):
-    selected = mampy.comp_ls()
+    selected = mampy.complist()
     if not selected:
-        cmds.select(list(root_comp.get_complete()), add=True)
+        cmds.selecet(root_comp.get_complete().cmdslist(), add=True)
     else:
         for comp in selected:
+            # Find correct dagpath to work on
             if not root_comp.dagpath == comp.dagpath:
                 continue
 
             if comp.is_complete():
-                cmds.select(list(comp), d=True)
+                cmds.select(comp.cmdslist(), d=True)
             else:
-                connected = list(comp.get_connected())
-                connected_not_selected = list(comp.toggle().get_connected())
+                connected = list(comp.get_connected_components())
+                connected_unselected = list(comp.toggle().get_connected_components())
 
-                if any(root_comp in c for c in connected):
+                if any(root_comp.index in c for c in connected):
                     kw = {'deselect': True}
                     iterable = connected
-                elif any(root_comp in c for c in connected_not_selected):
+                elif any(root_comp.index in c for c in connected_unselected):
                     kw = {'add': True}
-                    iterable = connected_not_selected
+                    iterable = connected_unselected
 
                 for c in iterable:
-                    if root_comp in c:
-                        cmds.select(list(c), **kw)
+                    if root_comp.index in c:
+                        cmds.select(c.cmdslist(), **kw)
 
 
-@undoable
+@undoable()
 @repeatable
 def select_deselect_isolated_components(loop=True, tolerance=0.35):
     """Clear mesh or loop under mouse."""
-    try:
-        preselect_hilite = mampy.comp_ls(preSelectHilite=True).pop()
-    except IndexError:
-        return logger.warn('Nothing in preselection.')
+    preselect = mampy.complist(preSelectHilite=True)
+    if not preselect:
+        raise NothingSelected()
 
-    if preselect_hilite.type == api.MFn.kMeshEdgeComponent:
+    preselect_component = preselect.pop()
+    if preselect_component.type == api.MFn.kMeshEdgeComponent:
         if not loop:
-            select_deselect_edge_lists(preselect_hilite, loop)
-        elif preselect_hilite.is_border(preselect_hilite.index):
-            select_deselect_border_edge(preselect_hilite, tolerance)
+            select_deselect_edge_lists(preselect_component, loop)
+        elif preselect_component.is_border(preselect_component.index):
+            select_deselect_border_edge(preselect_component, tolerance)
         else:
-            select_deselect_edge_lists(preselect_hilite, loop)
+            select_deselect_edge_lists(preselect_component, loop)
     else:
-        select_deselect_surrounded(preselect_hilite)
+        select_deselect_surrounded(preselect_component)
 
 
-@undoable
+@undoable()
 @repeatable
 def toggle_mesh_under_cursor():
     """Toggle mesh object under cursor."""
-    preselect = mampy.ls(preSelectHilite=True)
+    preselect = mampy.complist(preSelectHilite=True)
     if not preselect:
         under_cursor_mesh = get_object_under_cursor()
         if under_cursor_mesh is None:
             return
-        obj = mampy.get_node(under_cursor_mesh)
+        node = Node(under_cursor_mesh)
         if cmds.selectMode(q=True, component=True):
-            cmds.hilite(obj.get_transform().name)
+            cmds.hilite(str(node.transform))
         else:
-            cmds.select(obj.name, toggle=True)
+            cmds.select(str(node), toggle=True)
     else:
-        obj = preselect.iterdags().next()
-        trn = obj.get_transform()
-        if trn.name in mampy.ls(hl=True):
-            cmds.hilite(trn.name, unHilite=True)
+        node = preselect.pop().mdag
+        if node.transform in mampy.daglist(hl=True):
+            cmds.hilite(str(node.transform), unHilite=True)
 
 
+@undoable()
 def deselect_all_but():
-    preselect = mampy.ls(preSelectHilite=True)
+    preselect = mampy.complist(preSelectHilite=True)
     obj = get_object_under_cursor()
     if not obj:
         return
@@ -177,7 +174,7 @@ def deselect_all_but():
         cmds.hilite(obj, toggle=True)
 
 
-@undoable
+@undoable()
 def convert(comptype, **convert_arguments):
     """
     Convert current selection to given comptype.
@@ -190,78 +187,74 @@ def convert(comptype, **convert_arguments):
         'map': ComponentType(api.MFn.kMeshMapComponent, 'to_map'),
     }[comptype]
 
-    selected, converted = mampy.selected(), SelectionList()
-    # s, cl = mampy.selected(), mampy.SelectionList()
+    selected, converted = mampy.complist(), ComponentList()
     if not selected:
-        raise InvalidSelection('Nothing Selected.')
+        raise NothingSelected()
 
-    for component in selected.itercomps():
-        if component.type == convert_mode.type:
-            return logger.info('{} already active component type.'.format(comptype))
-
-        # Special treatment when converting vert -> edge
-        elif ('border' not in convert_arguments and
-                component.type == api.MFn.kMeshVertComponent and
-                convert_mode.type == api.MFn.kMeshEdgeComponent):
-            convert_arguments.update({'internal': True})
-
-        converted.append(getattr(component, convert_mode.function)(**convert_arguments))
+    for comp in selected:
+        if comp.type == convert_mode:
+            continue
+        converted.append(getattr(comp, convert_mode.function)(**convert_arguments))
 
     set_selection_mask(comptype)
-    cmds.select(list(converted))
+    cmds.select(converted.cmdslist())
 
 
-@undoable
+@undoable()
 @repeatable
 def flood():
     """Get contiguous components from current selection."""
-    selected = mampy.selected()
+    selected = mampy.complist()
     if not selected:
-        raise InvalidSelection('Select mesh component')
+        raise NothingSelected()
 
-    # extend selected with ``mampy.Component`` objects.
-    if list(selected.itercomps())[0].type == api.MFn.kMeshMapComponent:
-        selected.extend([comp.get_uv_shell() for comp in selected.itercomps()])
-    else:
-        selected.extend([comp.get_mesh_shell() for comp in selected.itercomps()])
-    cmds.select(list(selected))
+    flood = ComponentList()
+    for comp in selected:
+        if comp.type == MFn.kMeshMapComponent:
+            iter_ = comp.map_shells
+        else:
+            iter_ = comp.mesh_shells
+        flood.extend(iter_.itervalues())
+    cmds.select(flood.cmdslist())
 
 
-@undoable
+@undoable()
 @repeatable
 def inbetween():
     """Select components between the last two selections."""
-    if not cmds.selectPref(q=True, trackSelectionOrder=True):
-        raise TrackSelectionOrderNotSet('Set track selection order in'
-                                        ' preferences.')
+    # TODO: refactor and finish.
+    ordered_selection = mampy.complist(os=True)
 
-    slist = mampy.ordered_selection(-2)
-    if not slist or not len(slist) == 2:
-        return logger.warn('Invalid selection, select two mesh components.')
-
-    comptype = slist.itercomps().next().type
-    indices = [c.index for c in slist.itercomps()]
-
-    if (comptype in [
-            api.MFn.kMeshPolygonComponent,
-            api.MFn.kMeshEdgeComponent,
-            api.MFn.kMeshVertComponent]):
-        # check if a edge ring can be selected.
-        if (comptype == api.MFn.kMeshEdgeComponent and
-                cmds.polySelect(q=True, edgeRingPath=indices)):
-            inbetween = cmds.polySelect(q=True, ass=True, edgeRingPath=indices)
-        else:
-            inbetween = cmds.polySelectSp(list(slist), q=True, loop=True)
-    elif comptype == api.MFn.kMeshMapComponent:
-        path = cmds.polySelect(q=True, ass=True, shortestEdgePathUV=indices)
-        inbetween = cmds.polyListComponentConversion(path, tuv=True)
-
-    cmds.select(inbetween, add=True)
+    if not len(ordered_selection) % 2 == 0:
+        comp1, comp2 = ordered_selection[-2:]
+    else:
+        for comp in ordered_selection:
+            cmds.polySelect(comp.cmdslist(), q=True, loop=True)
 
 
-@undoable
+    # comptype = slist.itercomps().next().type
+    # indices = [c.index for c in slist.itercomps()]
+
+    # if (comptype in [
+    #         api.MFn.kMeshPolygonComponent,
+    #         api.MFn.kMeshEdgeComponent,
+    #         api.MFn.kMeshVertComponent]):
+    #     # check if a edge ring can be selected.
+    #     if (comptype == api.MFn.kMeshEdgeComponent and
+    #             cmds.polySelect(q=True, edgeRingPath=indices)):
+    #         inbetween = cmds.polySelect(q=True, ass=True, edgeRingPath=indices)
+    #     else:
+    #         inbetween = cmds.polySelectSp(list(slist), q=True, loop=True)
+    # elif comptype == api.MFn.kMeshMapComponent:
+    #     path = cmds.polySelect(q=True, ass=True, shortestEdgePathUV=indices)
+    #     inbetween = cmds.polyListComponentConversion(path, tuv=True)
+
+    # cmds.select(inbetween, add=True)
+
+
+@undoable()
 @repeatable
-def invert(shell=False):
+def poly_invert(shell=False):
     """
     Invert selection.
 
@@ -272,52 +265,45 @@ def invert(shell=False):
         selections there is no way that I know of to find out the active
         component type.
     """
-    slist, hilited = mampy.selected(), mampy.ls(hl=True)
-    smask = mampy.get_active_mask()
-    ctype = None
+    # To find out how we want to operate on the objects we walk through
+    # the possible outcomes leaving the object list at last.
+    modes = [mampy.complist(), mampy.daglist(hl=True), mampy.daglist()]
+    for mode, selected in enumerate(modes):
+        if not selected:
+            continue
+        break
 
-    # Try object invert
-    if smask.mode == MGlobal.kSelectObjectMode and not hilited:
-        dagobjs = cmds.ls(visible=True, assemblies=True)
-        if not dagobjs:
-            logger.warn('Nothing to invert.')
+    if mode == 2:
+        if not selected:
+            cmds.select(mampy.daglist(visible=True, assemblies=True).cmdslist())
         else:
-            cmds.select(dagobjs, toggle=True)
-        return
-
-    # set up component invert
-    if smask.mode == MGlobal.kSelectObjectMode and not slist:
-        return logger.warn('Switch selection mask from object to component.')
-    elif slist:
-        ctype = slist.itercomps().next().type
-    else:
-        for m in smask:
+            cmds.select(selected.cmdslist(), toggle=True)
+    if mode == 1:
+        for mask in get_active_flags_in_mask(object=False):
             try:
-                ctype = {
-                    smask.kSelectMeshVerts: api.MFn.kMeshVertComponent,
-                    smask.kSelectMeshEdges: api.MFn.kMeshEdgeComponent,
-                    smask.kSelectMeshFaces: api.MFn.kMeshPolygonComponent,
-                    smask.kSelectMeshUVs: api.MFn.kMeshMapComponent,
-                }[m]
+                active_mask = {
+                    'facet': MFn.kMeshPolygonComponent,
+                    'edge': MFn.kMeshEdgeComponent,
+                    'vertex': MFn.kMeshVertComponent,
+                    'polymeshUV': MFn.kMeshMapComponent,
+                }[mask]; break
             except KeyError:
                 continue
+        for dag in selected:
+            component = SingleIndexComponent.create(dag.dagpath, active_mask)
+            cmds.select(component.get_complete().cmdslist(), toggle=True)
+    if mode == 0:
+        selection_list = ComponentList()
+        for comp in selected:
+            if shell:
+                for mesh in comp.mesh_shells.itervalues():
+                    selection_list.append(mesh)
             else:
-                break
-
-    # perform component invert
-    t = SelectionList()
-    if not shell or not slist:
-        for dp in hilited:
-            t.extend(Component.create(dp, ctype).get_complete())
-    else:
-        for comp in slist.copy().itercomps():
-            t.extend(comp.get_mesh_shell() if shell else comp.get_complete())
-
-    # for some reason the tgl keyword makes cmds.select really fast.
-    cmds.select(list(t), tgl=True)
+                selection_list.append(comp.get_complete())
+        cmds.select(selection_list.cmdslist(), toggle=True)
 
 
-@undoable
+@undoable()
 @repeatable
 def nonquads(ngons=True, query=False):
     """
@@ -326,22 +312,22 @@ def nonquads(ngons=True, query=False):
     type_ = 3 if ngons else 1
 
     if query:
-        selected = mampy.selected()
+        selected = mampy.daglist()
 
     cmds.selectMode(component=True)
     cmds.selectType(facet=True)
 
     cmds.polySelectConstraint(mode=3, t=0x0008, size=type_)
     cmds.polySelectConstraint(disable=True)
-    ngons = mampy.selected()
+    ngons = mampy.daglist()
 
     if query:
-        cmds.select(list(selected))
+        cmds.select(selected.cmdslist())
         return ngons
     sys.stdout.write(str(len(ngons)) + ' N-Gon(s) Selected.\n')
 
 
-@undoable
+@undoable()
 @repeatable
 def traverse(expand=True, mode='normal'):
     if mode == 'normal':
@@ -355,4 +341,4 @@ def traverse(expand=True, mode='normal'):
 
 
 if __name__ == '__main__':
-    select_deselect_isolated_components()
+    pass
