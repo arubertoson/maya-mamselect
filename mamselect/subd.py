@@ -5,6 +5,8 @@ in Maya.
 If you want to quickly view how the mesh will sub divide this will work great,
 you can decide to display only selected or change the display of all mesh objects;
 even the subdivision levels.
+
+# TODO: Refactor to fit with new mampy
 """
 from functools import partial
 

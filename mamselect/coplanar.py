@@ -10,6 +10,7 @@ from mampy._old.utils import DraggerCtx, mvp
 from mampy._old.containers import SelectionList
 
 
+# TODO: refactor
 optionvar = mampy.optionVar()
 
 

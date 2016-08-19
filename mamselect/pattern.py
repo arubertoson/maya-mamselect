@@ -1,3 +1,6 @@
+"""
+Experimental.
+"""
 import logging
 import collections
 
@@ -179,9 +182,68 @@ class WalkPattern(collections.Sequence):
         return self.__class__()
 
 
-def flood():
-    cmds.select(WalkSelection().pattern)
+current_pattern = []
+def flood(add=False):
+    global current_pattern
+
+    selected = mampy.complist(os=True)
+    print len(selected)
+    if not len(selected) > 2:
+        current_pattern = []
+    pattern = selected[-2:]
+
+    if current_pattern and current_pattern[-1] == selected:
+        print 'yeah lets do it'
+        if not len(current_pattern) >= 2:
+            return
+        # try to get new pattern
+        complist1, complist2 = current_pattern[-1], current_pattern[-2]
+        for component in complist2:
+            complist1.toggle(component.node)
+
+        for comp1, comp2 in zip(complist1, complist2):
+            for c in comp1:
+                for d in comp2:
+                    p = comp1.new().add(c).add(d)
+                    result = cmds.polySelectSp(p.cmdslist(), q=True, loop=True) or []
+                    if result:
+                        result = mampy.complist(result).pop()
+                        jumps = len(result)-1
+                        result = cmds.polySelectSp(result.cmdslist(), q=True, loop=True)
+
+                        result = mampy.complist(result, fl=True)
+                        rotate = [i.index for i in result].index(c)
+                        de = collections.deque(result)
+                        de.rotate(-rotate)
+                        # print de
+
+                        print
+                        print c
+                        print list(de)
+                        print list(de)[::jumps]
+
+                        mod = len(de) % jumps
+                        ls =list(de)[::jumps]
+                        if mod:
+                            ls = ls[:-mod]
+                        for i in ls:
+                            cmds.select(i.cmdslist(), add=True)
+
+                        break
+
+    else:
+        print 'lets be boring'
+        cmds.select(pattern.cmdslist())
+        walk = WalkSelection()
+        cmds.select(walk.pattern)
+        if current_pattern and add:
+            cmds.select(current_pattern[-1].cmdslist(), add=True)
+        current_pattern.append(mampy.complist())
+
+
+
 
 
 if __name__ == '__main__':
-    flood()
+    walk = WalkSelection()
+    cmds.select(walk.pattern)

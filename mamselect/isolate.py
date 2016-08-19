@@ -9,6 +9,8 @@ some functionality is obsolete.
 To note, this isolating system works only on objects. This means you can't isolate
 components. Although that might be desirable at times from experience it's
 confusing since mesh operations will still apply to components outside of view.
+
+# TODO: Refactor to fit with new mampy standard.
 """
 import logging
 
