@@ -61,7 +61,6 @@ def set_mask(*masks):
         set_mask('meshComponents')
 
     """
-    print masks
     component_masks = {mask: True for mask in masks}
     if (cmds.selectMode(q=True, component=True) and
             any(cmds.selectType(q=True, **{mask: True}) for mask in component_masks.iterkeys())):
@@ -69,7 +68,7 @@ def set_mask(*masks):
         cmds.selectType(ocm=True, alc=False)
         cmds.selectType(ocm=True, **component_masks)
         cmds.selectType(**component_masks)
-        cmds.hilite(list(mampy.selected()))
+        cmds.hilite(mampy.daglist().cmdslist())
     else:
         cmds.selectMode(component=True)
         cmds.selectType(allComponents=False)
@@ -106,4 +105,4 @@ def multi_component_mask():
 
 
 if __name__ == '__main__':
-    print('hello')
+    pass
