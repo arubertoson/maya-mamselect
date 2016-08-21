@@ -1,5 +1,6 @@
 """
-Experimental.
+This module is highly experimental and in design process.
+#TODO: Refactor into workable code.
 """
 import logging
 import collections
@@ -216,11 +217,6 @@ def flood(add=False):
                         de = collections.deque(result)
                         de.rotate(-rotate)
                         # print de
-
-                        print
-                        print c
-                        print list(de)
-                        print list(de)[::jumps]
 
                         mod = len(de) % jumps
                         ls =list(de)[::jumps]
