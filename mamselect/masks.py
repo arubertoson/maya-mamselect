@@ -38,10 +38,10 @@ def exit_tool_and_mask():
         cmds.setToolTo('selectSuperContext')
     else:
         if cmds.selectMode(q=True, object=True):
-            hilited = mampy.ls(hl=True)
+            hilited = mampy.daglist(hl=True)
             if hilited:
-                cmds.hilite(list(hilited), toggle=True)
-                cmds.select(list(hilited))
+                cmds.hilite(hilited.cmdslist(), toggle=True)
+                cmds.select(hilited.cmdslist())
             else:
                 cmds.selectMode(component=True)
         else:
@@ -102,7 +102,3 @@ def map_mask(*map_masks):
 def multi_component_mask():
     """Helper function for setting multi compontent mask in viewport."""
     set_mask('meshComponents')
-
-
-if __name__ == '__main__':
-    pass
