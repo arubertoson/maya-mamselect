@@ -1,3 +1,10 @@
+"""
+#TODO: Needs a proper refactor, calculations should not be created and performed
+       in the actual class. The class should only be called if a context is to
+       be created.
+
+#TODO: Mampy needs updated.
+"""
 import collections
 
 from PySide import QtCore, QtGui
@@ -10,7 +17,6 @@ from mampy._old.utils import DraggerCtx, mvp
 from mampy._old.containers import SelectionList
 
 
-# TODO: refactor
 optionvar = mampy.optionVar()
 
 
